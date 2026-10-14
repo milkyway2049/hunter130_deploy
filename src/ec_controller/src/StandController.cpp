@@ -47,7 +47,7 @@ protected:
       cmd.effort = 0.0;
       cmd.kp = stand_kp_[i];
       cmd.kd = stand_kd_[i];
-      cmd.torque_mode = kCoupledJoint[i] ? 2.0 : 0.0;
+      cmd.torque_mode = isCoupledJoint(joint_names_[i]) ? 2.0 : 0.0;
     }
   }
 

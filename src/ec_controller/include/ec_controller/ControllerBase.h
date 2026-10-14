@@ -13,19 +13,13 @@
 namespace ec
 {
 
-// Coupled joints (DoubleCoupleJoint) in YAML order — shared by all controllers
-inline constexpr bool kCoupledJoint[23] = {
-//  L_hip_p  L_hip_r  L_hip_y  L_knee   L_ank_p  L_ank_r
-  false, false, false, false, true, true,
-//  R_hip_p  R_hip_r  R_hip_y  R_knee   R_ank_p  R_ank_r
-  false, false, false, false, true, true,
-//  waist_y  waist_r  waist_p
-  false, true, true,
-//  L_sho_p  L_sho_r  L_sho_y  L_elbow
-  false, false, false, false,
-//  R_sho_p  R_sho_r  R_sho_y  R_elbow
-  false, false, false, false
-};
+// Coupled joints use host Kp and motor Kd, independent of the configured joint order.
+inline bool isCoupledJoint(const std::string & name)
+{
+  return name == "left_ankle_pitch_joint" || name == "left_ankle_roll_joint" ||
+         name == "right_ankle_pitch_joint" || name == "right_ankle_roll_joint" ||
+         name == "waist_roll_joint" || name == "waist_pitch_joint";
+}
 
 // Lightweight joint data structure
 struct JointState

@@ -839,6 +839,28 @@
       }
     },
     {
+      "name": "left_wrist_roll_joint",
+      "type": "RJoint",
+      "config": {
+        "reverse": false,
+        "motorParams": {
+          "adapterId": "enx-replace-me-0",
+          "adapterType": "plugin-replace-me-0",
+          "busId": 3,
+          "motorId": 20,
+          "initParam": {
+            "model": "EC_A5020_P2"
+          }
+        },
+        "limit": {
+          "min": -2.7925268,
+          "max": 2.7925268
+        },
+        "maxSpd": 36.34,
+        "maxTor": 30.0
+      }
+    },
+    {
       "name": "right_shoulder_pitch_joint",
       "type": "RJoint",
       "config": {
@@ -924,6 +946,28 @@
         },
         "maxSpd": 36.34,
         "maxTor": 30
+      }
+    },
+    {
+      "name": "right_wrist_roll_joint",
+      "type": "RJoint",
+      "config": {
+        "reverse": false,
+        "motorParams": {
+          "adapterId": "enx-replace-me-0",
+          "adapterType": "plugin-replace-me-0",
+          "busId": 4,
+          "motorId": 25,
+          "initParam": {
+            "model": "EC_A5020_P2"
+          }
+        },
+        "limit": {
+          "min": -2.7925268,
+          "max": 2.7925268
+        },
+        "maxSpd": 36.34,
+        "maxTor": 30.0
       }
     }
   ]

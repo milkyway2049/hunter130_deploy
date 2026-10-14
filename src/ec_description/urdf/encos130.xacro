@@ -612,6 +612,36 @@
     <limit lower="-0.6108652" upper="2.0943951" effort="30" velocity="36.34" />
   </joint>
 
+  <link name="left_wrist_roll_link">
+    <inertial>
+      <origin xyz="0.07979044 0.00049128 0.00044533" rpy="0 0 0" />
+      <mass value="0.99326787" />
+      <inertia ixx="0.00046196" ixy="0.00021671" ixz="-0.00006169" iyy="0.00684056" iyz="0.00000717" izz="0.00679938" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ec_description/meshes/left_wrist_roll_link_hand.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ec_description/meshes/left_wrist_roll_link_hand.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="left_wrist_roll_joint" type="revolute">
+    <origin xyz="0.0492 -0.0001 0" rpy="0 0 0" />
+    <parent link="left_elbow_link" />
+    <child link="left_wrist_roll_link" />
+    <axis xyz="1 0 0" />
+    <limit lower="-2.7925268" upper="2.7925268" effort="30" velocity="36.34" />
+  </joint>
+
   <!-- ==================== Right Arm ==================== -->
   <link name="right_shoulder_pitch_link">
     <inertial>
@@ -735,6 +765,36 @@
     <child link="right_elbow_link" />
     <axis xyz="0 1 0" />
     <limit lower="-0.6108652" upper="2.0943951" effort="30" velocity="36.34" />
+  </joint>
+
+  <link name="right_wrist_roll_link">
+    <inertial>
+      <origin xyz="0.07979044 -0.00049128 0.00044533" rpy="0 0 0" />
+      <mass value="0.99326787" />
+      <inertia ixx="0.00046196" ixy="-0.00021671" ixz="-0.00006169" iyy="0.00684056" iyz="-0.00000717" izz="0.00679938" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ec_description/meshes/right_wrist_roll_link_hand.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ec_description/meshes/right_wrist_roll_link_hand.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="right_wrist_roll_joint" type="revolute">
+    <origin xyz="0.0492 0.0001 0" rpy="0 0 0" />
+    <parent link="right_elbow_link" />
+    <child link="right_wrist_roll_link" />
+    <axis xyz="1 0 0" />
+    <limit lower="-2.7925268" upper="2.7925268" effort="30" velocity="36.34" />
   </joint>
 
   <!-- ==================== ros2_control ==================== -->
