@@ -121,7 +121,7 @@ ros2 service call /controller_manager/switch_controller \
 
 ## 模型和硬件配置
 
-Hunter130 模型位于 `src/ec_description/urdf/encos130.xacro`，
+Hunter130 模型位于 `src/ec_description/urdf/hunter130.xacro`，
 包含本体描述并引入 `ros2_control.xacro` 中的硬件接口配置。
 机器人专用的电机、总线、标定和保护参数位于 `src/ec_description/config/control.json`，
 由 `ec_description` 安装并通过 `config_file` 传给关节硬件插件。
@@ -136,7 +136,7 @@ hunter130_deploy/
 │   │   ├── config/control.json    # SDK 电机、总线、标定和保护参数
 │   │   ├── meshes/
 │   │   └── urdf/
-│   │       ├── encos130.xacro      # Hunter130 本体模型和硬件接口入口
+│   │       ├── hunter130.xacro     # Hunter130 本体模型和硬件接口入口
 │   │       └── ros2_control.xacro  # 关节和 IMU 配置
 │   ├── ec_joint_hardware/
 │   ├── ec_imu_hardware/
