@@ -17,6 +17,9 @@ Hunter130 人形机器人的 ROS2 Jazzy 部署工作空间 `hunter130_deploy`，
 `ec_description`、`ec_controller`、`ec_radio`。控制器插件名使用
 `ec/DefaultController`、`ec/StandController`、`ec/WalkController`，C++ 命名空间为 `ec`。
 
+新复制硬件包的追加修改、IMU 坐标转换及验证结果见
+[硬件包修改说明](docs/hardware_changes.md)。
+
 ## 环境和依赖
 
 - Ubuntu 24.04、ROS2 Jazzy
@@ -55,6 +58,10 @@ sudo apt install -y \
   "/tmp/hunter130-sdk/jointsdk_1.4.5_${sdk_arch}_noble.deb"
 sudo ldconfig
 ```
+
+新复制的硬件包直接使用新版 `device/imu/imu.h`、`device/motor/types.h` 路径，
+已在 `encos_driver 4.0.0` + `joint_sdk 1.5.3` 环境中通过完整构建。
+上方旧版 SDK 安装示例属于原工程配置，当前硬件包未验证旧版 SDK 兼容性。
 
 ARM64 部署需要另外替换 `src/ec_controller/thirdparty/onnxruntime/` 中的头文件和
 共享库为对应架构版本。
@@ -116,6 +123,9 @@ ros2 service call /controller_manager/switch_controller \
 
 Hunter130 模型位于 `src/ec_description/urdf/encos130.xacro`，
 包含本体描述并引入 `ros2_control.xacro` 中的硬件接口配置。
+机器人专用的电机、总线、标定和保护参数位于 `src/ec_description/config/control.json`，
+由 `ec_description` 安装并通过 `config_file` 传给关节硬件插件。
+所有电机参数均显式设置 `canfd: true`，包含耦合关节的 `motorParams1` 和 `motorParams2`。
 模型引用的 24 个 STL 文件位于 `src/ec_description/meshes/`，
 网格路径使用相对于模型文件的 `../meshes/...`。
 
@@ -123,12 +133,12 @@ Hunter130 模型位于 `src/ec_description/urdf/encos130.xacro`，
 hunter130_deploy/
 ├── src/
 │   ├── ec_description/
+│   │   ├── config/control.json    # SDK 电机、总线、标定和保护参数
 │   │   ├── meshes/
 │   │   └── urdf/
 │   │       ├── encos130.xacro      # Hunter130 本体模型和硬件接口入口
 │   │       └── ros2_control.xacro  # 关节和 IMU 配置
 │   ├── ec_joint_hardware/
-│   │   └── config/control.json    # SDK 电机、总线、标定和保护参数
 │   ├── ec_imu_hardware/
 │   ├── ec_radio/
 │   └── ec_controller/
@@ -154,6 +164,10 @@ URDF 中的速度、力矩限值用于模型描述，SDK 的 `maxSpd`、`maxTor`
 `ros2_control.xacro` 中的 `adapter_type_0`、`interface_name_0` 配置关节通信，
 IMU 的 `adapter_type`、`interface_name`、`bus_idx` 等参数配置传感器通信。
 当前沿用 EtherCAT 和网卡名 `enp86s0`，需与目标机器一致。
+
+IMU 的安装坐标转换由 `ec_imu_hardware` 完成，输出机身坐标系（x 前、y 左、z 上）。
+角速度和加速度按 `(x, -z, y)` 映射；姿态四元数右乘绕 x 轴 -90° 的安装旋转后归一化，
+角速度单位为 rad/s。该转换固定对应当前 Hunter130 的 IMU 安装方式，控制器直接使用转换后的数据。
 
 ## 策略
 
