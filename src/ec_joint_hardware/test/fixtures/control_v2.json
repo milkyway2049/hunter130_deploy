@@ -1,8 +1,26 @@
 {
   "adapters": [
     {
-      "type": "plugin-replace-me-0",
-      "name": "enx-replace-me-0"
+      "type": "Ethercat",
+      "extend": {
+        "bitrate": 1000000,
+        "sample_point": 0.75,
+        "dbitrate": 5000000,
+        "dsample_point": 0.875,
+        "buses": {
+          "0:7": {
+            "bitrate": 500000,
+            "sample_point": 0.75
+          },
+          "0:6": {
+            "bitrate": 1000000,
+            "sample_point": 0.75,
+            "dbitrate": 5000000,
+            "dsample_point": 0.8
+          }
+        }
+      },
+      "name": "enp86s0"
     }
   ],
   "joints": [
@@ -12,13 +30,13 @@
       "config": {
         "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 0,
           "motorId": 1,
           "initParam": {
             "model": "EC_A7220_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -2.7925268,
@@ -34,13 +52,13 @@
       "config": {
         "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 0,
           "motorId": 2,
           "initParam": {
             "model": "EC_A7220_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -0.5235988,
@@ -56,13 +74,13 @@
       "config": {
         "reverse": true,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 0,
           "motorId": 3,
           "initParam": {
             "model": "EC_A7220_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -2.7925268,
@@ -78,13 +96,13 @@
       "config": {
         "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 0,
           "motorId": 4,
           "initParam": {
             "model": "EC_A7220_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -0.0872665,
@@ -159,22 +177,22 @@
           "max": 0.9232634663417323
         },
         "motorParams1": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 0,
           "motorId": 5,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "motorParams2": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 0,
           "motorId": 6,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "reverse": false,
         "limit": {
@@ -250,22 +268,22 @@
           "max": 0.9232634663417323
         },
         "motorParams1": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 0,
           "motorId": 5,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "motorParams2": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 0,
           "motorId": 6,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "reverse": true,
         "limit": {
@@ -282,13 +300,13 @@
       "config": {
         "reverse": true,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 1,
           "motorId": 7,
           "initParam": {
             "model": "EC_A7220_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -2.7925268,
@@ -304,13 +322,13 @@
       "config": {
         "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 1,
           "motorId": 8,
           "initParam": {
             "model": "EC_A7220_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -2.9670597,
@@ -326,13 +344,13 @@
       "config": {
         "reverse": true,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 1,
           "motorId": 9,
           "initParam": {
             "model": "EC_A7220_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -2.7925268,
@@ -348,13 +366,13 @@
       "config": {
         "reverse": true,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 1,
           "motorId": 10,
           "initParam": {
             "model": "EC_A7220_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -0.0872665,
@@ -429,22 +447,22 @@
           "max": 1.520197486450329
         },
         "motorParams1": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 1,
           "motorId": 11,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "motorParams2": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 1,
           "motorId": 12,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "reverse": true,
         "limit": {
@@ -520,22 +538,22 @@
           "max": 1.520197486450329
         },
         "motorParams1": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 1,
           "motorId": 11,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "motorParams2": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 1,
           "motorId": 12,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "reverse": true,
         "limit": {
@@ -552,13 +570,13 @@
       "config": {
         "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 2,
           "motorId": 13,
           "initParam": {
             "model": "EC_A7220_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -2.0071286,
@@ -633,22 +651,22 @@
           "max": 1.2217304763960306
         },
         "motorParams1": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 2,
           "motorId": 14,
           "initParam": {
             "model": "EC_A4315_P2"
-          }
+          },
+          "canfd": true
         },
         "motorParams2": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 2,
           "motorId": 15,
           "initParam": {
             "model": "EC_A4315_P2"
-          }
+          },
+          "canfd": true
         },
         "reverse": false,
         "limit": {
@@ -724,22 +742,22 @@
           "max": 1.2217304763960306
         },
         "motorParams1": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 2,
           "motorId": 14,
           "initParam": {
             "model": "EC_A4315_P2"
-          }
+          },
+          "canfd": true
         },
         "motorParams2": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 2,
           "motorId": 15,
           "initParam": {
             "model": "EC_A4315_P2"
-          }
+          },
+          "canfd": true
         },
         "reverse": false,
         "limit": {
@@ -756,13 +774,13 @@
       "config": {
         "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 3,
           "motorId": 16,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -3.577925,
@@ -778,13 +796,13 @@
       "config": {
         "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 3,
           "motorId": 17,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -0.1745329,
@@ -800,13 +818,13 @@
       "config": {
         "reverse": true,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 3,
           "motorId": 18,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -2.7925268,
@@ -822,13 +840,13 @@
       "config": {
         "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 3,
           "motorId": 19,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -0.6108652,
@@ -842,22 +860,22 @@
       "name": "left_wrist_roll_joint",
       "type": "RJoint",
       "config": {
-        "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 3,
           "motorId": 20,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
+        "reverse": false,
         "limit": {
           "min": -2.7925268,
           "max": 2.7925268
         },
         "maxSpd": 36.34,
-        "maxTor": 30.0
+        "maxTor": 30
       }
     },
     {
@@ -866,13 +884,13 @@
       "config": {
         "reverse": true,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 4,
           "motorId": 21,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -3.577925,
@@ -888,13 +906,13 @@
       "config": {
         "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 4,
           "motorId": 22,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -3.577925,
@@ -910,13 +928,13 @@
       "config": {
         "reverse": true,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 4,
           "motorId": 23,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -2.7925268,
@@ -932,13 +950,13 @@
       "config": {
         "reverse": true,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 4,
           "motorId": 24,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
         "limit": {
           "min": -0.6108652,
@@ -952,22 +970,22 @@
       "name": "right_wrist_roll_joint",
       "type": "RJoint",
       "config": {
-        "reverse": false,
         "motorParams": {
-          "adapterId": "enx-replace-me-0",
-          "adapterType": "plugin-replace-me-0",
+          "adapterId": 0,
           "busId": 4,
           "motorId": 25,
           "initParam": {
             "model": "EC_A5020_P2"
-          }
+          },
+          "canfd": true
         },
+        "reverse": false,
         "limit": {
           "min": -2.7925268,
           "max": 2.7925268
         },
         "maxSpd": 36.34,
-        "maxTor": 30.0
+        "maxTor": 30
       }
     }
   ]

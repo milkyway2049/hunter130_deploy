@@ -56,6 +56,10 @@ sudo apt install -y \
 sudo ldconfig
 ```
 
+新复制的硬件包直接使用新版 `device/imu/imu.h`、`device/motor/types.h` 路径，
+已在 `encos_driver 4.0.0` + `joint_sdk 1.5.3` 环境中验证。
+上方旧版 SDK 安装示例属于原工程配置，当前硬件包未验证旧版 SDK 兼容性。
+
 ARM64 部署需要另外替换 `src/ec_controller/thirdparty/onnxruntime/` 中的头文件和
 共享库为对应架构版本。
 
@@ -116,6 +120,9 @@ ros2 service call /controller_manager/switch_controller \
 
 Hunter130 模型位于 `src/ec_description/urdf/encos130.xacro`，
 包含本体描述并引入 `ros2_control.xacro` 中的硬件接口配置。
+机器人专用配置位于 `src/ec_description/config/control.json`，由 `ec_description` 安装，
+再通过 `config_file` 传给关节硬件插件。全部电机参数均显式设置 `canfd: true`，
+包括双腕以及耦合关节的 `motorParams1`、`motorParams2`。
 模型引用的 26 个 STL 文件位于 `src/ec_description/meshes/`，
 其中双腕关节、惯性及手部网格来自本次训练资产。原有关节继续使用现有描述，
 双腕网格使用 `package://ec_description/meshes/...` 路径。
@@ -124,14 +131,12 @@ Hunter130 模型位于 `src/ec_description/urdf/encos130.xacro`，
 hunter130_deploy/
 ├── src/
 │   ├── ec_description/
+│   │   ├── config/control.json    # SDK 电机、总线、标定和保护参数
 │   │   ├── meshes/
 │   │   └── urdf/
 │   │       ├── encos130.xacro      # Hunter130 本体模型和硬件接口入口
 │   │       └── ros2_control.xacro  # 关节和 IMU 配置
 │   ├── ec_joint_hardware/
-│   │   └── config/
-│   │       ├── control.json       # SDK 电机、总线、标定和保护参数
-│   │       └── control.wrist.template.json  # 已合并的双腕硬件配置参考
 │   ├── ec_imu_hardware/
 │   ├── ec_radio/
 │   └── ec_controller/
@@ -149,7 +154,7 @@ hunter130_deploy/
 默认姿态及完整精度 PD 增益；默认控制器维持零 Kp、Kd=0.5 的阻尼模式。
 耦合关节按名称选择 HostKpMotorKd 模式，避免增加腕关节后发生索引错位。
 
-双腕硬件映射已合并到 `src/ec_joint_hardware/config/control.json`，
+双腕硬件映射已合并到 `src/ec_description/config/control.json`，
 分别位于对应肘关节之后。JSON、URDF、ros2_control 和三个控制器的 25 关节顺序一致。
 
 | 关节 | 电机型号 | busId | motorId | reverse |
@@ -157,7 +162,7 @@ hunter130_deploy/
 | `left_wrist_roll_joint` | `EC_A5020_P2` | 3 | 20 | false |
 | `right_wrist_roll_joint` | `EC_A5020_P2` | 4 | 25 | false |
 
-`control.wrist.template.json` 保留这两项已填写配置作为参考，实际加载 `control.json`。
+实际加载 `ec_description` 安装目录下的 `config/control.json`。
 现有 23 项关节的电机方向、总线、并联踝/腰标定和硬件保护阈值保持原配置。
 双腕限位为 ±2.7925268 rad，`maxSpd=36.34`、`maxTor=30.0`。
 
@@ -191,6 +196,8 @@ IMU 的 `adapter_type`、`interface_name`、`bus_idx` 等参数配置传感器�
 IMU 输入应为 pelvis 坐标系（x 前、y 左、z 上）的 rad/s 和姿态，直立时投影重力约为
 `[0, 0, -1]`。现有 IMU 插件已做单位和安装坐标转换，控制器只归一化四元数并计算投影重力；
 需核对当前实物 IMU 安装位置与该转换是否对应 pelvis。
+安装转换由 `ec_imu_hardware` 完成：角速度和加速度按 `(x, -z, y)` 映射，
+四元数右乘绕 x 轴 −90° 的旋转后归一化，角速度单位为 rad/s。
 
 ## 行走日志
 
@@ -223,4 +230,4 @@ WalkController 的 CSV 和 Joint SDK 的 `*_command.csv.zstd`、`*_status.csv.zs
 列编号对应该控制器 `joints` 的 YAML 顺序，关节数量自动适配配置。
 记录的是控制器生成的命令；SDK 限幅后的电机侧数据由 `ec_joint_hardware` 的 `log_path` 独立记录。
 
-本次修改不包含编译或实机运行验证；源码改动需重新编译后生效。
+本次硬件包替换已通过本机完整构建验证；尚未进行实机运行验证。
