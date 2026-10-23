@@ -10,18 +10,24 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <unordered_map>
+#include <thread>
 
 namespace ec
 {
 class MimicController : public ControllerBase
 {
 public:
+  ~MimicController() override {stopWorker();}
+
   controller_interface::CallbackReturn on_configure(
     const rclcpp_lifecycle::State & previous_state) override
   {
@@ -29,8 +35,8 @@ public:
       return controller_interface::CallbackReturn::ERROR;
     }
     auto node = get_node();
-    node->declare_parameter<std::string>("policy_path", "config/policy/hunter130_mimic_50000.onnx");
-    node->declare_parameter<std::string>("metadata_path", "config/policy/hunter130_mimic_50000.json");
+    node->declare_parameter<std::string>("policy_path", "config/policy/hunter130_supermimic_176000.onnx");
+    node->declare_parameter<std::string>("metadata_path", "config/policy/hunter130_supermimic_176000.json");
     node->declare_parameter<std::string>("motion_path", "config/motions/love_you.csv");
     node->declare_parameter<double>("preparation_duration", 3.0);
     node->declare_parameter<double>("stand_before_duration", 1.0);
@@ -60,7 +66,7 @@ public:
         resolve(node->get_parameter("metadata_path").as_string()),
         resolve(node->get_parameter("motion_path").as_string()));
       const auto & names = policy_->metadata().joints;
-      if (jointCount() != mimic::kJoints) {throw std::runtime_error("MimicLite requires 25 joints");}
+      if (jointCount() != mimic::kJoints) {throw std::runtime_error("SuperMimic requires 25 joints");}
       std::vector<bool> matched(mimic::kJoints, false);
       for (size_t i = 0; i < jointCount(); ++i) {
         const auto found = std::find(names.begin(), names.end(), joint_names_[i]);
@@ -83,7 +89,7 @@ public:
         throw std::runtime_error("Standing pose exceeds robot limits");
       }
     } catch (const std::exception & error) {
-      RCLCPP_ERROR(logger(), "MimicLite configuration failed: %s", error.what());
+      RCLCPP_ERROR(logger(), "SuperMimic configuration failed: %s", error.what());
       return controller_interface::CallbackReturn::ERROR;
     }
     stop_subscription_ = node->create_subscription<std_msgs::msg::Bool>(
@@ -106,7 +112,7 @@ public:
         }
         state_publisher_->publish(state);
       });
-    RCLCPP_INFO(logger(), "Loaded Hunter130 MimicLite PPO: 467+272 inputs, 25 actions, %zu motion frames",
+    RCLCPP_INFO(logger(), "Loaded Hunter130 SuperMimic: 810+609 inputs (position feedback zero), 25 actions, %zu motion frames",
       policy_->frameCount());
     return controller_interface::CallbackReturn::SUCCESS;
   }
@@ -135,14 +141,17 @@ public:
       for (size_t i = 0; i < imu_names_.size(); ++i) {
         imu_indices_[i] = indices.at("imu_sensor/" + imu_names_[i]);
       }
+      startWorker();
     } catch (const std::exception & error) {
-      RCLCPP_ERROR(logger(), "Missing MimicLite feedback interface: %s", error.what());
+      RCLCPP_ERROR(logger(), "Missing SuperMimic feedback interface: %s", error.what());
       return controller_interface::CallbackReturn::ERROR;
     }
     phase_ = Phase::StandingBefore;
     stop_requested_ = false;
     active_ = true;
     first_update_ = true;
+    job_pending_ = false;
+    pending_elapsed_ = 0;
     phase_elapsed_ = tracking_elapsed_ = inference_elapsed_ = 0;
     if (!log_dir_.empty()) {
       std::error_code error;
@@ -158,9 +167,9 @@ public:
           log_ << '\n';
         }
       }
-      if (!log_) {RCLCPP_WARN(logger(), "Could not open MimicLite CSV log in %s", log_dir_.c_str());}
+      if (!log_) {RCLCPP_WARN(logger(), "Could not open SuperMimic CSV log in %s", log_dir_.c_str());}
     }
-    RCLCPP_INFO(logger(), "MimicLite: stand %.2fs -> prepare %.2fs -> play -> return %.2fs -> stand",
+    RCLCPP_INFO(logger(), "SuperMimic: stand %.2fs -> prepare %.2fs -> play -> return %.2fs -> stand",
       stand_before_duration_, preparation_duration_, return_duration_);
     return controller_interface::CallbackReturn::SUCCESS;
   }
@@ -168,6 +177,7 @@ public:
   controller_interface::CallbackReturn on_deactivate(
     const rclcpp_lifecycle::State & previous_state) override
   {
+    stopWorker();
     log_.close();
     log_.clear();
     active_ = false;
@@ -203,6 +213,18 @@ protected:
         initial_position_ = last_target_ = sample.position;
         first_update_ = false;
       }
+      if (job_pending_) {
+        pending_elapsed_ += dt;
+        if (pending_elapsed_ > policy_->metadata().control_dt) {
+          throw std::runtime_error("SuperMimic inference exceeded the 20ms policy deadline");
+        }
+      }
+      PolicyResult result;
+      const bool ready = takeResult(result);
+      if (ready) {
+        job_pending_ = false;
+        pending_elapsed_ = 0;
+      }
       if (stop_requested_.exchange(false) && phase_ != Phase::Returning) {beginReturn(last_target_);}
       mimic::Joints target;
       bool inferred = false;
@@ -222,13 +244,14 @@ protected:
         phase_elapsed_ += dt;
         target = blendTo(policy_->frame(0).position, preparation_duration_);
         if (phase_elapsed_ >= preparation_duration_) {
-          if ((sample.position - policy_->frame(0).position).cwiseAbs().maxCoeff() <= start_tolerance_) {
-            policy_->reset(sample);
-            action = policy_->infer(sample, 0);
-            target = policy_->target();
+          if (ready) {
+            action = result.action;
+            target = last_policy_target_ = result.target;
             phase_ = Phase::Tracking;
             inferred = true;
-            RCLCPP_INFO(logger(), "MimicLite motion started at 50Hz");
+            RCLCPP_INFO(logger(), "SuperMimic motion started at 50Hz");
+          } else if ((sample.position - policy_->frame(0).position).cwiseAbs().maxCoeff() <= start_tolerance_) {
+            submit(sample, 0, true);
           } else {
             RCLCPP_WARN_THROTTLE(logger(), *get_node()->get_clock(), 2000,
               "Waiting for reference start pose (maximum joint error %.3frad)",
@@ -239,19 +262,22 @@ protected:
         tracking_elapsed_ += dt;
         inference_elapsed_ += dt;
         const auto last = policy_->frameCount() - 1;
-        frame_index = std::min(last, static_cast<size_t>(
+        const auto requested_frame = std::min(last, static_cast<size_t>(
             std::floor((tracking_elapsed_ + 1e-9) / policy_->metadata().control_dt)));
-        if (inference_elapsed_ + 1e-9 >= policy_->metadata().control_dt) {
-          inference_elapsed_ = std::max(0., inference_elapsed_ - policy_->metadata().control_dt);
-          action = policy_->infer(sample, frame_index);
+        if (ready) {
+          action = result.action;
+          frame_index = result.frame;
+          last_policy_target_ = result.target;
           inferred = true;
-        } else {
-          policy_->advanceControl(dt);
         }
-        target = policy_->target();
-        if (frame_index == last) {
+        target = last_policy_target_;
+        if (ready && result.frame == last) {
           beginReturn(target);
           RCLCPP_INFO(logger(), "Motion complete; returning to standing pose");
+        } else if (inference_elapsed_ + 1e-9 >= policy_->metadata().control_dt &&
+          submit(sample, requested_frame, false))
+        {
+          inference_elapsed_ = std::max(0., inference_elapsed_ - policy_->metadata().control_dt);
         }
       } else if (phase_ == Phase::Returning) {
         phase_elapsed_ += dt;
@@ -260,7 +286,7 @@ protected:
           (sample.position - stand_position_).cwiseAbs().maxCoeff() <= start_tolerance_)
         {
           phase_ = Phase::StandingAfter;
-          RCLCPP_INFO(logger(), "MimicLite finished; holding standing pose until deactivation");
+          RCLCPP_INFO(logger(), "SuperMimic finished; holding standing pose until deactivation");
         }
       } else {
         target = stand_position_;
@@ -286,12 +312,91 @@ protected:
       }
     } catch (const std::exception & error) {
       phase_ = Phase::Fault;
-      RCLCPP_ERROR(logger(), "MimicLite fault latched; switch to damping before reactivation: %s", error.what());
+      RCLCPP_ERROR(logger(), "SuperMimic fault latched; switch to damping before reactivation: %s", error.what());
       damping();
     }
   }
 
 private:
+  struct PolicyRequest
+  {
+    mimic::Sample sample;
+    size_t frame{0};
+    bool reset{false};
+  };
+  struct PolicyResult
+  {
+    mimic::Action action{};
+    mimic::Joints target{mimic::Joints::Zero()};
+    size_t frame{0};
+  };
+  enum class WorkState {Idle, Pending, Running, Ready, Failed};
+
+  void startWorker()
+  {
+    stopWorker();
+    stopping_ = false;
+    work_state_ = WorkState::Idle;
+    worker_error_ = nullptr;
+    worker_ = std::thread([this]() {
+        std::unique_lock<std::mutex> lock(worker_mutex_);
+        while (true) {
+          worker_wakeup_.wait(lock, [this]() {return stopping_ || work_state_ == WorkState::Pending;});
+          if (stopping_) {return;}
+          const auto request = request_;
+          work_state_ = WorkState::Running;
+          lock.unlock();
+          PolicyResult result;
+          std::exception_ptr error;
+          try {
+            if (request.reset) {policy_->reset(request.sample);}
+            result.action = policy_->infer(request.sample, request.frame);
+            result.target = policy_->target();
+            result.frame = request.frame;
+          } catch (...) {error = std::current_exception();}
+          lock.lock();
+          result_ = result;
+          worker_error_ = error;
+          work_state_ = error ? WorkState::Failed : WorkState::Ready;
+        }
+      });
+  }
+
+  void stopWorker()
+  {
+    {
+      std::lock_guard<std::mutex> lock(worker_mutex_);
+      stopping_ = true;
+    }
+    worker_wakeup_.notify_one();
+    if (worker_.joinable()) {worker_.join();}
+  }
+
+  // The 1000Hz thread never waits for a mutex or runs ONNX inference.
+  bool submit(const mimic::Sample & sample, size_t frame, bool reset)
+  {
+    std::unique_lock<std::mutex> lock(worker_mutex_, std::try_to_lock);
+    if (!lock.owns_lock() || work_state_ != WorkState::Idle) {return false;}
+    request_ = PolicyRequest{sample, frame, reset};
+    work_state_ = WorkState::Pending;
+    job_pending_ = true;
+    pending_elapsed_ = 0;
+    lock.unlock();
+    worker_wakeup_.notify_one();
+    return true;
+  }
+
+  bool takeResult(PolicyResult & result)
+  {
+    std::unique_lock<std::mutex> lock(worker_mutex_, std::try_to_lock);
+    if (!lock.owns_lock()) {return false;}
+    if (work_state_ == WorkState::Failed) {std::rethrow_exception(worker_error_);}
+    if (work_state_ != WorkState::Ready) {return false;}
+    result = result_;
+    work_state_ = WorkState::Idle;
+    return true;
+  }
+
   mimic::Joints blendTo(const mimic::Joints & destination, double duration) const
   {
     double blend = std::min(1., phase_elapsed_ / duration);
@@ -322,11 +427,21 @@ private:
   double phase_elapsed_{0.}, tracking_elapsed_{0.}, inference_elapsed_{0.};
   mimic::Joints initial_position_{mimic::Joints::Zero()};
   mimic::Joints stand_position_{mimic::Joints::Zero()}, last_target_{mimic::Joints::Zero()};
+  mimic::Joints last_policy_target_{mimic::Joints::Zero()};
   std::array<size_t, 25> joint_to_policy_{}, position_indices_{}, velocity_indices_{};
   const std::array<std::string, 7> imu_names_{"orientation.w", "orientation.x", "orientation.y",
     "orientation.z", "angular_velocity.x", "angular_velocity.y", "angular_velocity.z"};
   std::array<size_t, 7> imu_indices_{};
   std::unique_ptr<mimic::Policy> policy_;
+  std::thread worker_;
+  std::mutex worker_mutex_;
+  std::condition_variable worker_wakeup_;
+  WorkState work_state_{WorkState::Idle};
+  PolicyRequest request_;
+  PolicyResult result_;
+  std::exception_ptr worker_error_;
+  bool stopping_{true}, job_pending_{false};
+  double pending_elapsed_{0};
   std::string log_dir_;
   std::ofstream log_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stop_subscription_;

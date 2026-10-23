@@ -90,7 +90,7 @@ public:
     switch_controller_client_->wait_for_service(30s);
 
     RCLCPP_INFO(this->get_logger(), "Controller Switcher Node started");
-    RCLCPP_INFO(this->get_logger(), "Modes: 1 damping, 2 stand, 3 AMP walk, 4 MimicLite");
+    RCLCPP_INFO(this->get_logger(), "Modes: 1 damping, 2 stand, 3 AMP walk, 4 SuperMimic");
   }
 
 private:
@@ -147,7 +147,7 @@ private:
         std_msgs::msg::Bool stop;
         stop.data = true;
         mimic_stop_pub_->publish(stop);
-        RCLCPP_INFO(get_logger(), "Returning MimicLite to standing before changing controller");
+        RCLCPP_INFO(get_logger(), "Returning SuperMimic to standing before changing controller");
       }
       return;
     }

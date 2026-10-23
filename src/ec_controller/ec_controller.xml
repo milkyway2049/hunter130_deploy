@@ -2,7 +2,7 @@
   <class name="ec/MimicController"
          type="ec::MimicController"
          base_class_type="controller_interface::ControllerInterface">
-    <description>Hunter130 MimicLite PPO reference motion tracking</description>
+    <description>Hunter130 SuperMimic reference motion tracking with zero position feedback</description>
   </class>
   <class name="ec/DefaultController"
          type="ec::DefaultController"

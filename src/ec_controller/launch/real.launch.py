@@ -7,7 +7,6 @@ from launch.actions import DeclareLaunchArgument, RegisterEventHandler
 from launch.event_handlers import OnProcessStart, OnProcessExit
 
 from launch_ros.actions import Node
-from launch.substitutions import LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterFile
 
 import xacro

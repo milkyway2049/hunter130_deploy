@@ -11,6 +11,7 @@
 namespace ec::mimic
 {
 constexpr size_t kJoints = 25;
+constexpr size_t kHistory = 10, kFuture = 10, kObservationSize = 810, kGoalSize = 609;
 using Joints = Eigen::Matrix<double, kJoints, 1>;
 using Action = std::array<float, kJoints>;
 
@@ -27,14 +28,16 @@ struct Frame
   Eigen::Vector3d root_position;
   Eigen::Quaterniond orientation;
   Joints position;
+  Joints velocity;
+  Eigen::Vector3d linear_velocity, angular_velocity;
 };
 
 struct Metadata
 {
   std::vector<std::string> joints;
   Joints default_position, kp, kd, scale, lower, upper;
-  double control_dt{0.02}, actuator_dt{0.005}, alpha{0.9};
-  int delay{2};
+  double control_dt{0.02};
+  std::array<size_t, 3> waist_indices{};
 };
 
 Eigen::Matrix3d projectedYaw(const Eigen::Quaterniond & orientation);
@@ -46,29 +49,27 @@ public:
   void load(const std::string & model, const std::string & metadata, const std::string & motion);
   void reset(const Sample & sample, bool align_heading = true);
   Action infer(const Sample & sample, size_t frame);
-  void advanceControl(double dt);
   Joints target() const;
   const Metadata & metadata() const {return metadata_;}
   const Frame & frame(size_t index) const {return frames_.at(index);}
   size_t frameCount() const {return frames_.size();}
-  const std::array<float, 467> & observations() const {return observations_;}
-  const std::array<float, 272> & command() const {return command_;}
+  const std::array<float, kObservationSize> & observations() const {return observations_;}
+  const std::array<float, kGoalSize> & command() const {return command_;}
 
 private:
   void buildObservation(const Sample & sample, size_t frame);
-  void filterSubstep();
+  Eigen::Matrix3d torsoRotation(const Eigen::Quaterniond & root, const Joints & position) const;
   Metadata metadata_;
   std::vector<Frame> frames_;
-  std::array<Sample, 17> history_;
-  std::array<Action, 3> actions_{}, actuation_history_{};
+  std::array<Sample, kHistory> history_;
+  std::array<Action, kHistory> actions_{};
+  Action last_action_{};
   Eigen::Matrix3d heading_offset_{Eigen::Matrix3d::Identity()};
   Joints applied_{Joints::Zero()};
-  std::array<float, 467> observations_{};
-  std::array<float, 272> command_{};
-  double actuator_elapsed_{0.0};
-  int substep_{0};
+  std::array<float, kObservationSize> observations_{};
+  std::array<float, kGoalSize> command_{};
   bool reset_{false};
-  Ort::Env env_{ORT_LOGGING_LEVEL_WARNING, "Hunter130MimicLite"};
+  Ort::Env env_{ORT_LOGGING_LEVEL_WARNING, "Hunter130SuperMimic"};
   Ort::Session session_{nullptr};
   Ort::MemoryInfo memory_{Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)};
 };

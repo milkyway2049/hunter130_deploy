@@ -1,5 +1,7 @@
 {
-  "format_version": 1,
+  "format_version": 2,
+  "policy_family": "supermimic",
+  "position_feedback": "zero",
   "joint_names": [
     "left_hip_pitch_joint",
     "left_hip_roll_joint",
@@ -28,30 +30,30 @@
     "right_wrist_roll_joint"
   ],
   "default_joint_pos": [
-    -0.10000000149011612,
+    -0.1,
     0.0,
     0.0,
-    0.30000001192092896,
-    -0.20000000298023224,
+    0.3,
+    -0.2,
     0.0,
-    -0.10000000149011612,
-    0.0,
-    0.0,
-    0.30000001192092896,
-    -0.20000000298023224,
+    -0.1,
     0.0,
     0.0,
+    0.3,
+    -0.2,
     0.0,
     0.0,
-    0.20000000298023224,
-    0.18000000715255737,
     0.0,
-    0.6000000238418579,
     0.0,
-    0.20000000298023224,
-    -0.18000000715255737,
+    0.2,
+    0.18,
     0.0,
-    0.6000000238418579,
+    0.6,
+    0.0,
+    0.2,
+    -0.18,
+    0.0,
+    0.6,
     0.0
   ],
   "kp": [
@@ -109,31 +111,31 @@
     0.907222843292423
   ],
   "action_scale": [
-    0.550000011920929,
-    0.3499999940395355,
-    0.550000011920929,
-    0.3499999940395355,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.550000011920929,
-    0.3499999940395355,
-    0.550000011920929,
-    0.3499999940395355,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.550000011920929,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142,
-    0.4399999976158142
+    0.37841165436563773,
+    0.37841165436563773,
+    0.9333178346439319,
+    0.37841165436563773,
+    0.7017237022773876,
+    0.3333187585817591,
+    0.37841165436563773,
+    0.37841165436563773,
+    0.9333178346439319,
+    0.37841165436563773,
+    0.7017237022773876,
+    0.3333187585817591,
+    0.9333178346439319,
+    1.2280164789854282,
+    0.9867989563275762,
+    0.5262927767080406,
+    0.5262927767080406,
+    0.5262927767080406,
+    0.5262927767080406,
+    0.5262927767080406,
+    0.5262927767080406,
+    0.5262927767080406,
+    0.5262927767080406,
+    0.5262927767080406,
+    0.5262927767080406
   ],
   "joint_lower": [
     -2.7925268,
@@ -189,61 +191,70 @@
     2.0943951,
     2.7925268
   ],
+  "history_length": 10,
+  "future_frames": 10,
   "control_dt": 0.02,
-  "actuator_dt": 0.005,
-  "action_alpha": 0.9,
-  "action_delay_substeps": 2,
-  "history_steps": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    8,
-    16
+  "torso_joint_names": [
+    "waist_yaw_joint",
+    "waist_roll_joint",
+    "waist_pitch_joint"
   ],
-  "future_steps": [
-    -8,
-    -4,
-    -2,
-    0,
-    1,
-    2,
-    3,
-    4
+  "torso_joint_axes": [
+    [
+      0.0,
+      0.0,
+      1.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0
+    ]
   ],
-  "inputs": {
+  "observation_layout": "term_major_oldest_to_newest",
+  "goal_layout": "10x60_then_zero_position3_then_torso_rotation_first_two_columns_row_major6",
+  "model_inputs": {
     "policy": [
       1,
-      467
+      810
     ],
-    "command": [
+    "goal": [
       1,
-      272
+      609
     ]
   },
-  "output": {
+  "model_outputs": {
     "action": [
       1,
       25
     ]
   },
-  "onnx_sha256": "0b68023999cb6b3dcda667179212dfb3dbd53b2dac3a2d89b55dfa5a13af2f11",
-  "export_source": {
-    "source_checkpoint": "/home/milkyway/MimicLite/mimic-lite/downloads/hunter130_amp/runs/2026-10-19_17-11-34/checkpoints/checkpoint_50000.pt",
-    "source_checkpoint_sha256": "5266f3b949b6957e164ac6c0a95e5fa6a3c0aa717da82a577e17608e25d41125",
-    "completed_updates": 50000,
-    "original_actor_max_abs_error": 0.0,
-    "onnx_max_abs_error": 1.6689300537109375e-06,
-    "onnx_sha256": "0b68023999cb6b3dcda667179212dfb3dbd53b2dac3a2d89b55dfa5a13af2f11",
-    "robot_xml_sha256": "b2a38574ba972fe19af627791ee010c830fd0cae0c49eb3b15d4a623168d2035",
-    "inputs": {
-      "policy": 467,
-      "command": 272
+  "scaling": "included_in_onnx",
+  "source_checkpoint": "/home/milkyway/SuperMimic-Reproduced/logs/hunter130_4096_10h/ckpt_latest.pt",
+  "source_checkpoint_sha256": "66f62f40a822283adc5a05a800d7b158e694939fe90342821cd9f44fb2309a84",
+  "iteration": 176000,
+  "model_sha256": "b708cf16003fc7ccaf0c8946fa6de5551fc8ab48e28e10b8a294881f480a5872",
+  "motions": [
+    {
+      "source": "/home/milkyway/opensource/hunter130_deploy/src/ec_controller/config/motions/dance_gentle.csv",
+      "source_sha256": "70ad9abfd77d280f0daafa27c35ae722cdbf9cbb29024109765f8e6fda58a268",
+      "path": "dance_gentle.csv",
+      "sha256": "e395ccf01c8e694a405b75bbb444cc19a099bf8266dd23dd2bed1bbf83f07ec8",
+      "frames": 501,
+      "velocities": "csv_50hz"
     },
-    "outputs": {
-      "action": 25
-    },
-    "copied_motions": 40
-  }
+    {
+      "source": "/home/milkyway/opensource/hunter130_deploy/src/ec_controller/config/motions/love_you.csv",
+      "source_sha256": "cb107e50332f868c9682742779e2bcf3a76225e7cb3d05cba99bc31ca82c8c35",
+      "path": "love_you.csv",
+      "sha256": "aa5acdff57c14ee66432895a85144426cf806c8fc14cb4da4261aedac7e1597c",
+      "frames": 3099,
+      "velocities": "csv_50hz"
+    }
+  ]
 }

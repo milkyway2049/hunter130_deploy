@@ -249,8 +249,8 @@ mimic_controller:
     - 0.0
     - 0.6
     - 0.0
-    policy_path: config/policy/hunter130_mimic_50000.onnx
-    metadata_path: config/policy/hunter130_mimic_50000.json
+    policy_path: config/policy/hunter130_supermimic_176000.onnx
+    metadata_path: config/policy/hunter130_supermimic_176000.json
     motion_path: $(var motion)
     stand_before_duration: 1.0
     preparation_duration: 3.0
