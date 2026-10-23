@@ -1,4 +1,9 @@
 <library path="ec_controller">
+  <class name="ec/MimicController"
+         type="ec::MimicController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>Hunter130 MimicLite PPO reference motion tracking</description>
+  </class>
   <class name="ec/DefaultController"
          type="ec::DefaultController"
          base_class_type="controller_interface::ControllerInterface">

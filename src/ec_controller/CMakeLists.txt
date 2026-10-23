@@ -17,6 +17,8 @@ find_package(ament_cmake REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(controller_manager_msgs REQUIRED)
 find_package(ec_radio REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 foreach(Dependency IN ITEMS ${CONTROLLER_INCLUDE_DEPENDS})
   find_package(${Dependency} REQUIRED)
@@ -31,6 +33,13 @@ set(ONNXRUNTIME_LIB_DIR "${ONNXRUNTIME_DIR}/lib")
 set(CMAKE_INSTALL_RPATH "$ORIGIN")
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
+add_library(ec_mimic_policy STATIC src/MimicPolicy.cpp)
+set_target_properties(ec_mimic_policy PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_features(ec_mimic_policy PUBLIC cxx_std_17)
+target_include_directories(ec_mimic_policy PUBLIC include ${ONNXRUNTIME_INCLUDE_DIR})
+target_link_directories(ec_mimic_policy PUBLIC ${ONNXRUNTIME_LIB_DIR})
+target_link_libraries(ec_mimic_policy PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json onnxruntime)
+
 add_library(
   ec_controller
   SHARED
@@ -38,6 +47,7 @@ add_library(
   src/DefaultController.cpp
   src/StandController.cpp
   src/WalkController.cpp
+  src/MimicController.cpp
 )
 
 target_compile_features(ec_controller PUBLIC cxx_std_17)
@@ -47,7 +57,7 @@ target_include_directories(ec_controller PRIVATE
   ${ONNXRUNTIME_INCLUDE_DIR}
 )
 target_link_directories(ec_controller PRIVATE ${ONNXRUNTIME_LIB_DIR})
-target_link_libraries(ec_controller PRIVATE onnxruntime)
+target_link_libraries(ec_controller PRIVATE onnxruntime ec_mimic_policy)
 
 ament_target_dependencies(
   ec_controller
@@ -96,6 +106,7 @@ install(CODE "
 add_executable(controller_switcher_node
   src/controller_switcher_node.cpp
 )
+target_include_directories(controller_switcher_node PRIVATE include)
 target_compile_features(controller_switcher_node PUBLIC cxx_std_17)
 ament_target_dependencies(controller_switcher_node
   rclcpp
@@ -106,13 +117,6 @@ ament_target_dependencies(controller_switcher_node
 install(TARGETS controller_switcher_node
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
-
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  set(ament_cmake_cpplint_FOUND TRUE)
-  set(ament_cmake_copyright_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
 
 ament_export_targets(export_ec_controller HAS_LIBRARY_TARGET)
 ament_export_dependencies(${CONTROLLER_INCLUDE_DEPENDS} ec_radio)

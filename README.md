@@ -3,6 +3,12 @@
 Hunter130 人形机器人的 ROS2 Jazzy 部署工作空间 `hunter130_deploy`，
 软件包统一使用 `ec_` 前缀。
 
+本仓库仅保留实机部署所需的源码、构建配置、模型和运行资源。
+包含独立的 **Mimic 模式 4（CH6）**，与 AMP 行走模式 3 同时可用。
+Mimic 的流程为：站立等待 → 过渡到动作起点 → 播放一次 → 平滑回站 → 持续站立。
+默认动作已设为《爱你》完整版（约 62 秒），文件名 `love_you.csv`。
+低强度片段 `dance_gentle.csv` 也可通过启动参数选择，命令见下文。
+
 ## 软件包
 
 | 软件包 | 说明 |
@@ -11,16 +17,12 @@ Hunter130 人形机器人的 ROS2 Jazzy 部署工作空间 `hunter130_deploy`，
 | [ec_joint_hardware](src/ec_joint_hardware/) | 关节电机硬件插件 |
 | [ec_imu_hardware](src/ec_imu_hardware/) | IMU 硬件插件 |
 | [ec_radio](src/ec_radio/) | IBUS 遥控器消息和串口节点 |
-| [ec_controller](src/ec_controller/) | 阻尼、站立、强化学习行走控制器及切换节点 |
-
-原 `phanerox_description`、`phanerox_controller`、`phanerox_radio` 分别更名为
-`ec_description`、`ec_controller`、`ec_radio`。控制器插件名使用
-`ec/DefaultController`、`ec/StandController`、`ec/WalkController`，C++ 命名空间为 `ec`。
+| [ec_controller](src/ec_controller/) | 阻尼、站立、AMP 行走、Mimic 动作控制器及切换节点 |
 
 ## 环境和依赖
 
 - Ubuntu 24.04、ROS2 Jazzy
-- Encos `encos_driver` 和 `joint_sdk` C++ SDK
+- Encos `encos_driver` 4.0.0 和 `joint_sdk` 1.5.3 C++ SDK（现有硬件包验证环境）
 - 内置 ONNX Runtime 1.28.1（amd64 / x86_64）
 
 以下命令在 Bash 终端中执行。安装 ROS2 Jazzy 后，安装构建和运行依赖：
@@ -30,35 +32,17 @@ source /opt/ros/jazzy/setup.bash
 sudo apt update
 sudo apt install -y \
   build-essential cmake python3-colcon-common-extensions \
-  libeigen3-dev nlohmann-json3-dev wget \
+  libeigen3-dev nlohmann-json3-dev \
   ros-jazzy-ros2-control ros-jazzy-ros2-controllers \
   ros-jazzy-ament-index-cpp ros-jazzy-ament-index-python \
   ros-jazzy-asio-cmake-module ros-jazzy-serial-driver \
   ros-jazzy-robot-state-publisher \
   ros-jazzy-ros2launch ros-jazzy-xacro \
-  ros-jazzy-rosidl-default-generators ros-jazzy-rosidl-default-runtime \
-  ros-jazzy-ament-lint-auto ros-jazzy-ament-lint-common
+  ros-jazzy-rosidl-default-generators ros-jazzy-rosidl-default-runtime
 ```
 
-SDK 使用官方
-[encos_driver v3.3.2](https://github.com/EncosTech/encos_driver/releases/tag/v3.3.2)
-和 [joint_sdk v1.4.5](https://github.com/EncosTech/joint_sdk/releases/tag/v1.4.5) DEB 包：
-
-```bash
-sdk_arch=$(dpkg --print-architecture)
-mkdir -p /tmp/hunter130-sdk
-wget -P /tmp/hunter130-sdk \
-  "https://github.com/EncosTech/encos_driver/releases/download/v3.3.2/libencosdriver_3.3.2_${sdk_arch}_noble.deb" \
-  "https://github.com/EncosTech/joint_sdk/releases/download/v1.4.5/jointsdk_1.4.5_${sdk_arch}_noble.deb"
-sudo apt install -y \
-  "/tmp/hunter130-sdk/libencosdriver_3.3.2_${sdk_arch}_noble.deb" \
-  "/tmp/hunter130-sdk/jointsdk_1.4.5_${sdk_arch}_noble.deb"
-sudo ldconfig
-```
-
-新复制的硬件包直接使用新版 `device/imu/imu.h`、`device/motor/types.h` 路径，
-已在 `encos_driver 4.0.0` + `joint_sdk 1.5.3` 环境中验证。
-上方旧版 SDK 安装示例属于原工程配置，当前硬件包未验证旧版 SDK 兼容性。
+安装对应架构的 Encos SDK，确保 CMake 能找到 `encos_driver` 和 `joint_sdk`。
+硬件包使用新版 `device/imu/imu.h`、`device/motor/types.h` 路径及 PVT 枚举接口。
 
 ARM64 部署需要另外替换 `src/ec_controller/thirdparty/onnxruntime/` 中的头文件和
 共享库为对应架构版本。
@@ -69,7 +53,7 @@ ARM64 部署需要另外替换 `src/ec_controller/thirdparty/onnxruntime/` 中�
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
+colcon build --symlink-install --cmake-args -DBUILD_TESTING=OFF
 source install/setup.bash
 ```
 
@@ -80,7 +64,7 @@ colcon build --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
 ```
 
 如果已有旧包构建结果，先移走旧的 `build/`、`install/`、`log/`，并使用未加载旧
-工作空间的新终端重新编译，避免原 `phanerox_*` 包残留。
+工作空间的新终端重新编译。
 
 ## 启动
 
@@ -88,6 +72,13 @@ colcon build --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
 
 ```bash
 ros2 launch ec_controller real.launch.py
+```
+
+默认播放《爱你》。选择低强度片段：
+
+```bash
+ros2 launch ec_controller real.launch.py \
+  motion:="$(ros2 pkg prefix --share ec_controller)/config/motions/dance_gentle.csv"
 ```
 
 在另一个已加载工作空间环境的终端启动遥控器：
@@ -102,11 +93,15 @@ ros2 run ec_radio radio_node --ros-args \
 | 1 | `default_controller` | 零比例增益，阻尼增益为 0.5 |
 | 2 | `stand_controller` | 保持配置中的站立姿态 |
 | 3 | `walk_controller` | ONNX 策略行走 |
+| 4 | `mimic_controller` | MimicLite 参考动作跟踪，播放前后保持站立 |
 
-切换顺序为阻尼 → 站立 → 行走 → 阻尼，也允许站立 → 阻尼。
+首次启动按阻尼 → 站立 → AMP 行走进入；舞蹈使用 **CH5 → CH6**，退出使用 **CH6 → CH5**。
 CH0 控制偏航角速度、CH2 控制前后速度、CH3 控制左右速度，1450–1550 为死区。
-CH4 和 CH5 分别选择站立和行走；无按键时选择阻尼。CH6、CH7 为预留模式，
-当前切换节点将其映射到阻尼模式。
+CH4、CH5、CH6 分别选择站立、AMP 行走和 Mimic；无按键时选择阻尼，CH7 仍为预留模式。
+从 AMP 行走切到 Mimic 后，默认先站立 1 秒，再用 3 秒过渡到参考起始姿态。
+播放完成后用 3 秒回到站立并保持；模式 4 持续有效时不会重复播放。
+CH6 → CH5 时先平滑回站，收到完成状态后再切回 AMP 行走；再次选择 CH6 可重播。
+Mimic 播放中选择模式 2，同样会先回站再切换站立控制器；模式 1 可直接切换阻尼。
 
 手动切换示例：
 
@@ -230,4 +225,4 @@ WalkController 的 CSV 和 Joint SDK 的 `*_command.csv.zstd`、`*_status.csv.zs
 列编号对应该控制器 `joints` 的 YAML 顺序，关节数量自动适配配置。
 记录的是控制器生成的命令；SDK 限幅后的电机侧数据由 `ec_joint_hardware` 的 `log_path` 独立记录。
 
-本次硬件包替换已通过本机完整构建验证；尚未进行实机运行验证。
+实机运行验证需在目标机器人上完成。

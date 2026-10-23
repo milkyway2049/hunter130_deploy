@@ -3,10 +3,12 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler
 from launch.event_handlers import OnProcessStart, OnProcessExit
 
 from launch_ros.actions import Node
+from launch.substitutions import LaunchConfiguration
+from launch_ros.parameter_descriptions import ParameterFile
 
 import xacro
 
@@ -23,8 +25,8 @@ def generate_launch_description():
     doc = xacro.process_file(xacro_file)
     robot_description = {"robot_description": doc.toxml()}
 
-    controllers_config_file = os.path.join(
-        controller_path, "config", "controllers.yaml"
+    controllers_config_file = ParameterFile(
+        os.path.join(controller_path, "config", "controllers.yaml"), allow_substs=True
     )
 
     control_node = Node(
@@ -90,8 +92,18 @@ def generate_launch_description():
         parameters=[controllers_config_file],
     )
 
+    mimic_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["mimic_controller", "--controller-manager", "controller_manager", "--inactive"],
+        output="screen",
+    )
+
     return LaunchDescription(
         [
+            DeclareLaunchArgument(
+                "motion", default_value=os.path.join(controller_path, "config", "motions", "love_you.csv")
+            ),
             RegisterEventHandler(
                 event_handler=OnProcessStart(
                     target_action=control_node,
@@ -119,6 +131,12 @@ def generate_launch_description():
             RegisterEventHandler(
                 event_handler=OnProcessExit(
                     target_action=walk_controller_spawner,
+                    on_exit=[mimic_controller_spawner],
+                )
+            ),
+            RegisterEventHandler(
+                event_handler=OnProcessExit(
+                    target_action=mimic_controller_spawner,
                     on_exit=[controller_switcher_node],
                 )
             ),

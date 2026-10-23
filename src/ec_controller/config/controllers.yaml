@@ -10,6 +10,8 @@ controller_manager:
       type: ec/StandController
     walk_controller:
       type: ec/WalkController
+    mimic_controller:
+      type: ec/MimicController
 joint_state_broadcaster:
   ros__parameters:
     use_local_topics: false
@@ -20,6 +22,7 @@ controller_switcher:
     - default_controller
     - stand_controller
     - walk_controller
+    - mimic_controller
     always_on_controllers:
     - joint_state_broadcaster
     initial_controller: default_controller
@@ -29,8 +32,14 @@ controller_switcher:
       - stand_controller
       stand_controller:
       - walk_controller
+      - mimic_controller
       - default_controller
       walk_controller:
+      - mimic_controller
+      - default_controller
+      mimic_controller:
+      - walk_controller
+      - stand_controller
       - default_controller
 default_controller:
   ros__parameters:
@@ -184,3 +193,67 @@ walk_controller:
     - right_shoulder_yaw_joint
     - right_elbow_joint
     - right_wrist_roll_joint
+
+# Mode 4: stand -> prepare -> reference motion -> return -> stand.
+mimic_controller:
+  ros__parameters:
+    joints:
+    - left_hip_pitch_joint
+    - left_hip_roll_joint
+    - left_hip_yaw_joint
+    - left_knee_joint
+    - left_ankle_pitch_joint
+    - left_ankle_roll_joint
+    - right_hip_pitch_joint
+    - right_hip_roll_joint
+    - right_hip_yaw_joint
+    - right_knee_joint
+    - right_ankle_pitch_joint
+    - right_ankle_roll_joint
+    - waist_yaw_joint
+    - waist_roll_joint
+    - waist_pitch_joint
+    - left_shoulder_pitch_joint
+    - left_shoulder_roll_joint
+    - left_shoulder_yaw_joint
+    - left_elbow_joint
+    - left_wrist_roll_joint
+    - right_shoulder_pitch_joint
+    - right_shoulder_roll_joint
+    - right_shoulder_yaw_joint
+    - right_elbow_joint
+    - right_wrist_roll_joint
+    stand_pos:
+    - -0.1
+    - 0.0
+    - 0.0
+    - 0.3
+    - -0.2
+    - 0.0
+    - -0.1
+    - 0.0
+    - 0.0
+    - 0.3
+    - -0.2
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.2
+    - 0.18
+    - 0.0
+    - 0.6
+    - 0.0
+    - 0.2
+    - -0.18
+    - 0.0
+    - 0.6
+    - 0.0
+    policy_path: config/policy/hunter130_mimic_50000.onnx
+    metadata_path: config/policy/hunter130_mimic_50000.json
+    motion_path: $(var motion)
+    stand_before_duration: 1.0
+    preparation_duration: 3.0
+    return_duration: 3.0
+    start_position_tolerance: 0.35
+    log_dir: /home/milkyway/log/hunter130
