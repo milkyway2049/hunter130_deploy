@@ -5,6 +5,7 @@
 #include <pluginlib/class_list_macros.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <ec_teleop_msgs/msg/quest_reference.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -64,7 +65,7 @@ public:
       policy_ = std::make_unique<mimic::Policy>();
       policy_->load(resolve(node->get_parameter("policy_path").as_string()),
         resolve(node->get_parameter("metadata_path").as_string()),
-        resolve(node->get_parameter("motion_path").as_string()));
+        liveReference() ? "" : resolve(node->get_parameter("motion_path").as_string()));
       const auto & names = policy_->metadata().joints;
       if (jointCount() != mimic::kJoints) {throw std::runtime_error("SuperMimic requires 25 joints");}
       std::vector<bool> matched(mimic::kJoints, false);
@@ -92,11 +93,18 @@ public:
       RCLCPP_ERROR(logger(), "SuperMimic configuration failed: %s", error.what());
       return controller_interface::CallbackReturn::ERROR;
     }
+    if (liveReference()) {
+      reference_subscription_ = node->create_subscription<ec_teleop_msgs::msg::QuestReference>(
+        "/quest/reference", rclcpp::QoS(1).best_effort(),
+        [this](ec_teleop_msgs::msg::QuestReference::ConstSharedPtr message) {receiveReference(*message);});
+    }
+    const std::string topic = liveReference() ? "/quest" : "/mimic";
     stop_subscription_ = node->create_subscription<std_msgs::msg::Bool>(
-      "/mimic/stop", 10, [this](std_msgs::msg::Bool::ConstSharedPtr message) {
+      topic + "/stop", 10, [this](std_msgs::msg::Bool::ConstSharedPtr message) {
         if (message->data && active_.load()) {stop_requested_.store(true);}
       });
-    state_publisher_ = node->create_publisher<std_msgs::msg::String>("/mimic/state", 10);
+    if (liveReference()) {ready_publisher_ = node->create_publisher<std_msgs::msg::Bool>("/quest/ready", 1);}
+    state_publisher_ = node->create_publisher<std_msgs::msg::String>(topic + "/state", 10);
     state_timer_ = node->create_wall_timer(std::chrono::milliseconds(50), [this]() {
         std_msgs::msg::String state;
         if (!active_.load()) {state.data = "inactive";}
@@ -111,6 +119,12 @@ public:
           }
         }
         state_publisher_->publish(state);
+        if (ready_publisher_) {
+          std_msgs::msg::Bool ready;
+          std::lock_guard<std::mutex> lock(reference_mutex_);
+          ready.data = reference_.valid && reference_.enabled && fresh(reference_);
+          ready_publisher_->publish(ready);
+        }
       });
     RCLCPP_INFO(logger(), "Loaded Hunter130 SuperMimic: 810+609 inputs (position feedback zero), 25 actions, %zu motion frames",
       policy_->frameCount());
@@ -140,6 +154,14 @@ public:
       }
       for (size_t i = 0; i < imu_names_.size(); ++i) {
         imu_indices_[i] = indices.at("imu_sensor/" + imu_names_[i]);
+      }
+      if (liveReference()) {
+        std::lock_guard<std::mutex> lock(reference_mutex_);
+        if (!reference_.valid || !reference_.enabled || !fresh(reference_)) {
+          throw std::runtime_error("Quest requires a fresh calibrated stream with both grips held");
+        }
+        live_reference_ = reference_;
+        live_session_ = reference_.session;
       }
       startWorker();
     } catch (const std::exception & error) {
@@ -187,6 +209,8 @@ public:
   }
 
 protected:
+  virtual bool liveReference() const {return false;}
+
   void onUpdate(const rclcpp::Time & time, const rclcpp::Duration & period) override
   {
     mimic::Sample sample;
@@ -225,6 +249,17 @@ protected:
         job_pending_ = false;
         pending_elapsed_ = 0;
       }
+      if (liveReference()) {
+        std::unique_lock<std::mutex> lock(reference_mutex_, std::try_to_lock);
+        if (lock.owns_lock()) {live_reference_ = reference_;}
+        if ((!live_reference_.valid || !live_reference_.enabled || !fresh(live_reference_) ||
+          live_reference_.session != live_session_) &&
+          phase_ != Phase::Returning && phase_ != Phase::StandingAfter)
+        {
+          beginReturn(last_target_);
+          RCLCPP_WARN(logger(), "Quest released, stale or invalid; returning to stand. Cycle mode to rearm.");
+        }
+      }
       if (stop_requested_.exchange(false) && phase_ != Phase::Returning) {beginReturn(last_target_);}
       mimic::Joints target;
       bool inferred = false;
@@ -242,7 +277,7 @@ protected:
         }
       } else if (phase_ == Phase::Preparing) {
         phase_elapsed_ += dt;
-        target = blendTo(policy_->frame(0).position, preparation_duration_);
+        target = blendTo((liveReference() ? live_reference_.frames[0].position : policy_->frame(0).position), preparation_duration_);
         if (phase_elapsed_ >= preparation_duration_) {
           if (ready) {
             action = result.action;
@@ -250,18 +285,18 @@ protected:
             phase_ = Phase::Tracking;
             inferred = true;
             RCLCPP_INFO(logger(), "SuperMimic motion started at 50Hz");
-          } else if ((sample.position - policy_->frame(0).position).cwiseAbs().maxCoeff() <= start_tolerance_) {
+          } else if ((sample.position - (liveReference() ? live_reference_.frames[0].position : policy_->frame(0).position)).cwiseAbs().maxCoeff() <= start_tolerance_) {
             submit(sample, 0, true);
           } else {
             RCLCPP_WARN_THROTTLE(logger(), *get_node()->get_clock(), 2000,
               "Waiting for reference start pose (maximum joint error %.3frad)",
-              (sample.position - policy_->frame(0).position).cwiseAbs().maxCoeff());
+              (sample.position - (liveReference() ? live_reference_.frames[0].position : policy_->frame(0).position)).cwiseAbs().maxCoeff());
           }
         }
       } else if (phase_ == Phase::Tracking) {
         tracking_elapsed_ += dt;
         inference_elapsed_ += dt;
-        const auto last = policy_->frameCount() - 1;
+        const auto last = liveReference() ? 0 : policy_->frameCount() - 1;
         const auto requested_frame = std::min(last, static_cast<size_t>(
             std::floor((tracking_elapsed_ + 1e-9) / policy_->metadata().control_dt)));
         if (ready) {
@@ -271,7 +306,7 @@ protected:
           inferred = true;
         }
         target = last_policy_target_;
-        if (ready && result.frame == last) {
+        if (!liveReference() && ready && result.frame == last) {
           beginReturn(target);
           RCLCPP_INFO(logger(), "Motion complete; returning to standing pose");
         } else if (inference_elapsed_ + 1e-9 >= policy_->metadata().control_dt &&
@@ -318,11 +353,68 @@ protected:
   }
 
 private:
+  struct LiveReference
+  {
+    std::array<mimic::Frame, mimic::kFuture> frames;
+    std::chrono::steady_clock::time_point received{};
+    uint64_t session{0}, sequence{0};
+    bool valid{false}, enabled{false};
+  };
+  static bool fresh(const LiveReference & reference)
+  {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - reference.received).count() < .15;
+  }
+  void receiveReference(const ec_teleop_msgs::msg::QuestReference & message)
+  {
+    std::lock_guard<std::mutex> lock(reference_mutex_);
+    // Reordered packets never refresh the watchdog or overwrite newer state.
+    if (reference_.session != 0 && message.session_id == reference_.session &&
+      message.sequence <= reference_.sequence) {return;}
+    reference_.valid = false;
+    const double age = (get_node()->now() - rclcpp::Time(message.header.stamp)).seconds();
+    if (message.protocol_version != 1 || message.header.frame_id != "quest_robot_world" ||
+      !std::isfinite(age) || age < -.05 || age > .15 ||
+      !std::isfinite(message.source_age) || message.source_age < 0 || message.source_age > .12 ||
+      !std::isfinite(message.sample_dt) || std::abs(message.sample_dt - .02) > 1e-6 ||
+      !message.calibrated || message.session_id == 0) {return;}
+    LiveReference next;
+    for (size_t j = 0; j < mimic::kJoints; ++j) {
+      if (message.joint_names[j] != policy_->metadata().joints[j]) {return;}
+    }
+    for (size_t i = 0; i < mimic::kFuture; ++i) {
+      auto & f = next.frames[i];
+      const auto & p = message.root_poses[i];
+      const auto & v = message.root_velocities[i];
+      f.root_position = {p.position.x, p.position.y, p.position.z};
+      f.orientation = Eigen::Quaterniond(p.orientation.w, p.orientation.x, p.orientation.y, p.orientation.z);
+      f.linear_velocity = {v.linear.x, v.linear.y, v.linear.z};
+      f.angular_velocity = {v.angular.x, v.angular.y, v.angular.z};
+      for (size_t j = 0; j < mimic::kJoints; ++j) {
+        f.position[j] = message.joint_positions[i * mimic::kJoints + j];
+        f.velocity[j] = message.joint_velocities[i * mimic::kJoints + j];
+      }
+      if (!f.root_position.allFinite() || f.root_position.head<2>().norm() > 100 ||
+        f.root_position.z() < .35 || f.root_position.z() > 1.1 ||
+        !f.orientation.coeffs().allFinite() || std::abs(f.orientation.norm() - 1) > .001 ||
+        !f.position.allFinite() || !f.velocity.allFinite() || f.velocity.cwiseAbs().maxCoeff() > 10 ||
+        !f.linear_velocity.allFinite() || f.linear_velocity.norm() > 3 ||
+        !f.angular_velocity.allFinite() || f.angular_velocity.norm() > 8 ||
+        (f.position.array() < policy_->metadata().lower.array()).any() ||
+        (f.position.array() > policy_->metadata().upper.array()).any()) {return;}
+    }
+    next.received = std::chrono::steady_clock::now();
+    next.session = message.session_id;
+    next.sequence = message.sequence;
+    next.enabled = message.enabled;
+    next.valid = true;
+    reference_ = next;
+  }
   struct PolicyRequest
   {
     mimic::Sample sample;
     size_t frame{0};
     bool reset{false};
+    std::array<mimic::Frame, mimic::kFuture> horizon;
   };
   struct PolicyResult
   {
@@ -349,6 +441,7 @@ private:
           PolicyResult result;
           std::exception_ptr error;
           try {
+            if (liveReference()) {policy_->setReference(request.horizon);}
             if (request.reset) {policy_->reset(request.sample);}
             result.action = policy_->infer(request.sample, request.frame);
             result.target = policy_->target();
@@ -377,7 +470,10 @@ private:
   {
     std::unique_lock<std::mutex> lock(worker_mutex_, std::try_to_lock);
     if (!lock.owns_lock() || work_state_ != WorkState::Idle) {return false;}
-    request_ = PolicyRequest{sample, frame, reset};
+    request_.sample = sample;
+    request_.frame = frame;
+    request_.reset = reset;
+    if (liveReference()) {request_.horizon = live_reference_.frames;}
     work_state_ = WorkState::Pending;
     job_pending_ = true;
     pending_elapsed_ = 0;
@@ -433,6 +529,10 @@ private:
     "orientation.z", "angular_velocity.x", "angular_velocity.y", "angular_velocity.z"};
   std::array<size_t, 7> imu_indices_{};
   std::unique_ptr<mimic::Policy> policy_;
+  std::mutex reference_mutex_;
+  LiveReference reference_, live_reference_;
+  uint64_t live_session_{0};
+  rclcpp::Subscription<ec_teleop_msgs::msg::QuestReference>::SharedPtr reference_subscription_;
   std::thread worker_;
   std::mutex worker_mutex_;
   std::condition_variable worker_wakeup_;
@@ -445,9 +545,17 @@ private:
   std::string log_dir_;
   std::ofstream log_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stop_subscription_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ready_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_publisher_;
   rclcpp::TimerBase::SharedPtr state_timer_;
+};
+class QuestController : public MimicController
+{
+protected:
+  bool liveReference() const override {return true;}
 };
 }  // namespace ec
 
 PLUGINLIB_EXPORT_CLASS(ec::MimicController, controller_interface::ControllerInterface)
+
+PLUGINLIB_EXPORT_CLASS(ec::QuestController, controller_interface::ControllerInterface)

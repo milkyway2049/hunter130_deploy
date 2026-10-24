@@ -98,6 +98,12 @@ def generate_launch_description():
         output="screen",
     )
 
+    quest_controller_spawner = Node(
+        package="controller_manager", executable="spawner",
+        arguments=["quest_controller", "--controller-manager", "controller_manager", "--inactive"],
+        output="screen",
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -136,6 +142,12 @@ def generate_launch_description():
             RegisterEventHandler(
                 event_handler=OnProcessExit(
                     target_action=mimic_controller_spawner,
+                    on_exit=[quest_controller_spawner],
+                )
+            ),
+            RegisterEventHandler(
+                event_handler=OnProcessExit(
+                    target_action=quest_controller_spawner,
                     on_exit=[controller_switcher_node],
                 )
             ),

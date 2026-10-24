@@ -1,4 +1,8 @@
 <library path="ec_controller">
+  <class name="ec/QuestController" type="ec::QuestController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>Quest full-body live references through the trained SuperMimic actor</description>
+  </class>
   <class name="ec/MimicController"
          type="ec::MimicController"
          base_class_type="controller_interface::ControllerInterface">

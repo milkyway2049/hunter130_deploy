@@ -25,11 +25,11 @@ struct Sample
 
 struct Frame
 {
-  Eigen::Vector3d root_position;
-  Eigen::Quaterniond orientation;
-  Joints position;
-  Joints velocity;
-  Eigen::Vector3d linear_velocity, angular_velocity;
+  Eigen::Vector3d root_position{Eigen::Vector3d::Zero()};
+  Eigen::Quaterniond orientation{Eigen::Quaterniond::Identity()};
+  Joints position{Joints::Zero()}, velocity{Joints::Zero()};
+  Eigen::Vector3d linear_velocity{Eigen::Vector3d::Zero()};
+  Eigen::Vector3d angular_velocity{Eigen::Vector3d::Zero()};
 };
 
 struct Metadata
@@ -48,6 +48,7 @@ class Policy
 public:
   void load(const std::string & model, const std::string & metadata, const std::string & motion);
   void reset(const Sample & sample, bool align_heading = true);
+  void setReference(const std::array<Frame, kFuture> & horizon);
   Action infer(const Sample & sample, size_t frame);
   Joints target() const;
   const Metadata & metadata() const {return metadata_;}

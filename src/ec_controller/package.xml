@@ -21,6 +21,7 @@
   <depend>rclcpp</depend>
   <depend>controller_manager_msgs</depend>
   <depend>ec_radio</depend>
+  <depend>ec_teleop_msgs</depend>
 
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>ec_description</exec_depend>

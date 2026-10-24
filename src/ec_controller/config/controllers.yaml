@@ -12,6 +12,8 @@ controller_manager:
       type: ec/WalkController
     mimic_controller:
       type: ec/MimicController
+    quest_controller:
+      type: ec/QuestController
 joint_state_broadcaster:
   ros__parameters:
     use_local_topics: false
@@ -23,6 +25,7 @@ controller_switcher:
     - stand_controller
     - walk_controller
     - mimic_controller
+    - quest_controller
     always_on_controllers:
     - joint_state_broadcaster
     initial_controller: default_controller
@@ -252,6 +255,69 @@ mimic_controller:
     policy_path: config/policy/hunter130_supermimic_176000.onnx
     metadata_path: config/policy/hunter130_supermimic_176000.json
     motion_path: $(var motion)
+    stand_before_duration: 1.0
+    preparation_duration: 3.0
+    return_duration: 3.0
+    start_position_tolerance: 0.35
+    log_dir: /home/milkyway/log/hunter130
+
+# Mode 5 / CH7: calibrated Meta full-body references.
+quest_controller:
+  ros__parameters:
+    joints:
+    - left_hip_pitch_joint
+    - left_hip_roll_joint
+    - left_hip_yaw_joint
+    - left_knee_joint
+    - left_ankle_pitch_joint
+    - left_ankle_roll_joint
+    - right_hip_pitch_joint
+    - right_hip_roll_joint
+    - right_hip_yaw_joint
+    - right_knee_joint
+    - right_ankle_pitch_joint
+    - right_ankle_roll_joint
+    - waist_yaw_joint
+    - waist_roll_joint
+    - waist_pitch_joint
+    - left_shoulder_pitch_joint
+    - left_shoulder_roll_joint
+    - left_shoulder_yaw_joint
+    - left_elbow_joint
+    - left_wrist_roll_joint
+    - right_shoulder_pitch_joint
+    - right_shoulder_roll_joint
+    - right_shoulder_yaw_joint
+    - right_elbow_joint
+    - right_wrist_roll_joint
+    stand_pos:
+    - -0.1
+    - 0.0
+    - 0.0
+    - 0.3
+    - -0.2
+    - 0.0
+    - -0.1
+    - 0.0
+    - 0.0
+    - 0.3
+    - -0.2
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.2
+    - 0.18
+    - 0.0
+    - 0.6
+    - 0.0
+    - 0.2
+    - -0.18
+    - 0.0
+    - 0.6
+    - 0.0
+    policy_path: config/policy/hunter130_supermimic_176000.onnx
+    metadata_path: config/policy/hunter130_supermimic_176000.json
     stand_before_duration: 1.0
     preparation_duration: 3.0
     return_duration: 3.0

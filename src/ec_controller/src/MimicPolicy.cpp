@@ -100,51 +100,57 @@ void Policy::load(
     throw std::runtime_error("Invalid SuperMimic timing, limits or control parameters");
   }
 
-  std::ifstream csv(motion);
-  std::string line;
-  if (!csv || !std::getline(csv, line)) {throw std::runtime_error("Cannot load motion CSV: " + motion);}
-  std::vector<std::string> expected{"time", "root_tx", "root_ty", "root_tz",
-    "root_qw", "root_qx", "root_qy", "root_qz"};
-  expected.insert(expected.end(), metadata_.joints.begin(), metadata_.joints.end());
-  for (const auto & name : metadata_.joints) {expected.push_back("velocity_" + name);}
-  for (const auto * name : {"root_vx", "root_vy", "root_vz", "root_wx", "root_wy", "root_wz"}) {
-    expected.push_back(name);
-  }
-  if (split(line) != expected) {throw std::runtime_error("SuperMimic motion CSV header/joint order mismatch");}
-  frames_.clear();
-  while (std::getline(csv, line)) {
-    const auto cells = split(line);
-    if (cells.size() != expected.size()) {throw std::runtime_error("Motion CSV row width mismatch");}
-    std::array<double, 64> values{};
-    for (size_t i = 0; i < cells.size(); ++i) {
-      size_t consumed = 0;
-      values[i] = std::stod(cells[i], &consumed);
-      if (consumed != cells[i].size() || !std::isfinite(values[i])) {
-        throw std::runtime_error("Invalid motion CSV number");
+  if (!motion.empty()) {
+    std::ifstream csv(motion);
+    std::string line;
+    if (!csv || !std::getline(csv, line)) {throw std::runtime_error("Cannot load motion CSV: " + motion);}
+    std::vector<std::string> expected{"time", "root_tx", "root_ty", "root_tz",
+      "root_qw", "root_qx", "root_qy", "root_qz"};
+    expected.insert(expected.end(), metadata_.joints.begin(), metadata_.joints.end());
+    for (const auto & name : metadata_.joints) {expected.push_back("velocity_" + name);}
+    for (const auto * name : {"root_vx", "root_vy", "root_vz", "root_wx", "root_wy", "root_wz"}) {
+      expected.push_back(name);
+    }
+    if (split(line) != expected) {throw std::runtime_error("SuperMimic motion CSV header/joint order mismatch");}
+    frames_.clear();
+    while (std::getline(csv, line)) {
+      const auto cells = split(line);
+      if (cells.size() != expected.size()) {throw std::runtime_error("Motion CSV row width mismatch");}
+      std::array<double, 64> values{};
+      for (size_t i = 0; i < cells.size(); ++i) {
+        size_t consumed = 0;
+        values[i] = std::stod(cells[i], &consumed);
+        if (consumed != cells[i].size() || !std::isfinite(values[i])) {
+          throw std::runtime_error("Invalid motion CSV number");
+        }
       }
+      if (std::abs(values[0] - frames_.size() * metadata_.control_dt) > 1e-6) {
+        throw std::runtime_error("Motion must be uniformly sampled at 50Hz starting at time zero");
+      }
+      Frame frame;
+      frame.root_position = Eigen::Vector3d(values[1], values[2], values[3]);
+      frame.orientation = Eigen::Quaterniond(values[4], values[5], values[6], values[7]);
+      if (std::abs(frame.orientation.norm() - 1.) > .001) {
+        throw std::runtime_error("Motion quaternion is not unit length");
+      }
+      frame.orientation.normalize();
+      std::copy_n(values.begin() + 8, kJoints, frame.position.data());
+      std::copy_n(values.begin() + 33, kJoints, frame.velocity.data());
+      frame.linear_velocity = Eigen::Vector3d(values[58], values[59], values[60]);
+      frame.angular_velocity = Eigen::Vector3d(values[61], values[62], values[63]);
+      if ((frame.position.array() < metadata_.lower.array() - 1e-5).any() ||
+        (frame.position.array() > metadata_.upper.array() + 1e-5).any())
+      {
+        throw std::runtime_error("Reference joint position exceeds robot limits");
+      }
+      frames_.push_back(frame);
     }
-    if (std::abs(values[0] - frames_.size() * metadata_.control_dt) > 1e-6) {
-      throw std::runtime_error("Motion must be uniformly sampled at 50Hz starting at time zero");
-    }
-    Frame frame;
-    frame.root_position = Eigen::Vector3d(values[1], values[2], values[3]);
-    frame.orientation = Eigen::Quaterniond(values[4], values[5], values[6], values[7]);
-    if (std::abs(frame.orientation.norm() - 1.) > .001) {
-      throw std::runtime_error("Motion quaternion is not unit length");
-    }
-    frame.orientation.normalize();
-    std::copy_n(values.begin() + 8, kJoints, frame.position.data());
-    std::copy_n(values.begin() + 33, kJoints, frame.velocity.data());
-    frame.linear_velocity = Eigen::Vector3d(values[58], values[59], values[60]);
-    frame.angular_velocity = Eigen::Vector3d(values[61], values[62], values[63]);
-    if ((frame.position.array() < metadata_.lower.array() - 1e-5).any() ||
-      (frame.position.array() > metadata_.upper.array() + 1e-5).any())
-    {
-      throw std::runtime_error("Reference joint position exceeds robot limits");
-    }
-    frames_.push_back(frame);
+    if (frames_.size() < 2) {throw std::runtime_error("Motion needs at least two frames");}
+  } else {
+    const Frame standing{Eigen::Vector3d(0, 0, .68), Eigen::Quaterniond::Identity(),
+      metadata_.default_position, Joints::Zero(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()};
+    frames_.assign(kFuture, standing);
   }
-  if (frames_.size() < 2) {throw std::runtime_error("Motion needs at least two frames");}
 
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
@@ -176,6 +182,23 @@ void Policy::load(
   if (inputs != std::set<std::string>{"policy", "goal"}) {
     throw std::runtime_error("Duplicate or missing SuperMimic input");
   }
+}
+
+void Policy::setReference(const std::array<Frame, kFuture> & horizon)
+{
+  for (const auto & frame : horizon) {
+    if (!frame.root_position.allFinite() || !frame.position.allFinite() ||
+      !frame.velocity.allFinite() || !frame.linear_velocity.allFinite() ||
+      !frame.angular_velocity.allFinite() || !frame.orientation.coeffs().allFinite() ||
+      std::abs(frame.orientation.norm() - 1.) > .001 ||
+      (frame.position.array() < metadata_.lower.array() - 1e-5).any() ||
+      (frame.position.array() > metadata_.upper.array() + 1e-5).any())
+    {
+      throw std::runtime_error("Invalid live SuperMimic reference horizon");
+    }
+  }
+  frames_.assign(horizon.begin(), horizon.end());
+  for (auto & frame : frames_) {frame.orientation.normalize();}
 }
 
 void Policy::reset(const Sample & sample, bool align_heading)

@@ -11,6 +11,7 @@ set(CONTROLLER_INCLUDE_DEPENDS
   controller_interface
   rclcpp
   std_msgs
+  ec_teleop_msgs
 )
 
 find_package(ament_cmake REQUIRED)

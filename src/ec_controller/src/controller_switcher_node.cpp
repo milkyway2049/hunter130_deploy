@@ -74,15 +74,25 @@ public:
       [this](const std_msgs::msg::Float32::SharedPtr msg) {
         if (msg->data > .5f) {switchController("mimic_controller");}
       });
+    quest_sub_ = this->create_subscription<std_msgs::msg::Float32>(
+      "/controller_switch/quest_controller", 10,
+      [this](std_msgs::msg::Float32::ConstSharedPtr msg) {
+        if (msg->data > .5f) {switchController("quest_controller");}
+      });
+    quest_ready_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+      "/quest/ready", 1, [this](std_msgs::msg::Bool::ConstSharedPtr msg) {
+        quest_ready_ = msg->data;
+        quest_ready_time_ = std::chrono::steady_clock::now();
+      });
+    quest_stop_pub_ = this->create_publisher<std_msgs::msg::Bool>("/quest/stop", 10);
+    quest_state_sub_ = this->create_subscription<std_msgs::msg::String>(
+      "/quest/state", 10, [this](std_msgs::msg::String::ConstSharedPtr msg) {
+        handleState("quest_controller", msg->data);
+      });
     mimic_stop_pub_ = this->create_publisher<std_msgs::msg::Bool>("/mimic/stop", 10);
     mimic_state_sub_ = this->create_subscription<std_msgs::msg::String>(
       "/mimic/state", 10, [this](std_msgs::msg::String::ConstSharedPtr msg) {
-        if (!return_pending_ || active_controller_ != "mimic_controller") {return;}
-        if (msg->data == "returning") {return_observed_ = true;}
-        if (msg->data == "standing_after" && return_observed_) {
-          return_ready_ = true;
-          switchController(return_controller_);
-        }
+        handleState("mimic_controller", msg->data);
       });
 
     // 等待服务可用
@@ -90,10 +100,19 @@ public:
     switch_controller_client_->wait_for_service(30s);
 
     RCLCPP_INFO(this->get_logger(), "Controller Switcher Node started");
-    RCLCPP_INFO(this->get_logger(), "Modes: 1 damping, 2 stand, 3 AMP walk, 4 SuperMimic");
+    RCLCPP_INFO(this->get_logger(), "Modes: 1 damping, 2 stand, 3 AMP walk, 4 SuperMimic, 5 Quest full body");
   }
 
 private:
+  void handleState(const std::string & controller, const std::string & state)
+  {
+    if (!return_pending_ || active_controller_ != controller) {return;}
+    if (state == "returning") {return_observed_ = true;}
+    if (state == "standing_after" && return_observed_) {
+      return_ready_ = true;
+      switchController(return_controller_);
+    }
+  }
   void radioCallback(const ec_radio::msg::Radio::SharedPtr msg)
   {
     if (msg->mode != last_mode_) {
@@ -116,10 +135,17 @@ private:
     }
     if (switch_in_flight_) {pending_controller_ = controller_name; return;}
     if (active_controller_ == controller_name) {
-      if (controller_name == "mimic_controller") {
+      if (controller_name == "mimic_controller" || controller_name == "quest_controller") {
         return_pending_ = return_observed_ = return_ready_ = false;
         return_controller_.clear();
       }
+      return;
+    }
+
+    if (controller_name == "quest_controller" && (!quest_ready_ ||
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - quest_ready_time_).count() > .15))
+    {
+      RCLCPP_WARN(get_logger(), "Quest not ready: calibrate, hold both grips, then select mode 5 again");
       return;
     }
 
@@ -137,7 +163,7 @@ private:
       return;
     }
 
-    if (active_controller_ == "mimic_controller" &&
+    if ((active_controller_ == "mimic_controller" || active_controller_ == "quest_controller") &&
       (controller_name == "walk_controller" || controller_name == "stand_controller") && !return_ready_)
     {
       return_controller_ = controller_name;
@@ -146,7 +172,7 @@ private:
         return_observed_ = false;
         std_msgs::msg::Bool stop;
         stop.data = true;
-        mimic_stop_pub_->publish(stop);
+        (active_controller_ == "quest_controller" ? quest_stop_pub_ : mimic_stop_pub_)->publish(stop);
         RCLCPP_INFO(get_logger(), "Returning SuperMimic to standing before changing controller");
       }
       return;
@@ -180,7 +206,7 @@ private:
             RCLCPP_ERROR(this->get_logger(), "Service call failed: %s", e.what());
           }
           switch_in_flight_ = false;
-          if (active_controller_ != "mimic_controller") {
+          if (active_controller_ != "mimic_controller" && active_controller_ != "quest_controller") {
             return_pending_ = return_observed_ = return_ready_ = false;
             return_controller_.clear();
           }
@@ -196,6 +222,9 @@ private:
 
   std::string active_controller_;
   uint8_t last_mode_{0};
+  bool quest_ready_{false};
+  std::chrono::steady_clock::time_point quest_ready_time_{};
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr quest_ready_sub_;
   bool switch_in_flight_{false}, return_pending_{false}, return_observed_{false}, return_ready_{false};
   std::string pending_controller_;
   std::string return_controller_;
@@ -207,7 +236,9 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr default_sub_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr stand_sub_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr walk_sub_;
-  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr mimic_sub_;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr mimic_sub_, quest_sub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr quest_stop_pub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr quest_state_sub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr mimic_stop_pub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr mimic_state_sub_;
 

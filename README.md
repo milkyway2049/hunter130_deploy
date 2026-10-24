@@ -4,7 +4,7 @@ Hunter130 人形机器人的 ROS2 Jazzy 部署工作空间 `hunter130_deploy`，
 软件包统一使用 `ec_` 前缀。
 
 本仓库仅保留实机部署所需的源码、构建配置、模型和运行资源。
-包含独立的 **SuperMimic 模式 4（CH6）**，与 AMP 行走模式 3 同时可用。
+包含 **SuperMimic 模式 4（CH6）** 和 **Quest 全身化身模式 5（CH7）**，与 AMP 行走模式 3 同时可用。
 Mimic 的流程为：站立等待 → 过渡到动作起点 → 播放一次 → 平滑回站 → 持续站立。
 默认动作是《爱你》完整版 `love_you.csv`（约 62 秒），也可通过启动参数选择
 10 秒低强度片段 `dance_gentle.csv`。模式 4 只使用关节和 IMU 反馈，
@@ -17,6 +17,7 @@ Mimic 的流程为：站立等待 → 过渡到动作起点 → 播放一次 →
 | [ec_description](src/ec_description/) | Hunter130 URDF、网格和 ros2_control 配置 |
 | [ec_joint_hardware](src/ec_joint_hardware/) | 关节电机硬件插件 |
 | [ec_imu_hardware](src/ec_imu_hardware/) | IMU 硬件插件 |
+| [ec_teleop_msgs](src/ec_teleop_msgs/) | Quest 实时 10 帧参考接口 |
 | [ec_radio](src/ec_radio/) | IBUS 遥控器消息和串口节点 |
 | [ec_controller](src/ec_controller/) | 阻尼、站立、AMP 行走、Mimic 动作控制器及切换节点 |
 
@@ -95,10 +96,11 @@ ros2 run ec_radio radio_node --ros-args \
 | 2 | `stand_controller` | 保持配置中的站立姿态 |
 | 3 | `walk_controller` | ONNX 策略行走 |
 | 4 | `mimic_controller` | SuperMimic 参考动作跟踪，位置项置零，播放前后保持站立 |
+| 5 | `quest_controller` | Meta 全身骨架实时重定向，经同一 SuperMimic actor 跟随 |
 
 首次启动按阻尼 → 站立 → AMP 行走进入；舞蹈使用 **CH5 → CH6**，退出使用 **CH6 → CH5**。
 CH0 控制偏航角速度、CH2 控制前后速度、CH3 控制左右速度，1450–1550 为死区。
-CH4、CH5、CH6 分别选择站立、AMP 行走和 Mimic；无按键时选择阻尼，CH7 仍为预留模式。
+CH4、CH5、CH6、CH7 分别选择站立、AMP 行走、Mimic 和 Quest；无按键时选择阻尼。
 从 AMP 行走切到 Mimic 后，默认先站立 1 秒，再用 3 秒过渡到参考起始姿态。
 播放完成后用 3 秒回到站立并保持；模式 4 持续有效时不会重复播放。
 CH6 → CH5 时先平滑回站，收到完成状态后再切回 AMP 行走；再次选择 CH6 可重播。
@@ -228,11 +230,12 @@ ONNX 在后台线程执行，1000 Hz 更新只提交观测、非阻塞读取结�
 随仓库的两份动作已转换，参考速度由原 50 Hz CSV 差分得到。
 导出工具也支持训练 NPZ，可保留其原始参考速度。
 
+模型导出、骨架重定向、Quest 应用和仿真均放在 [../hunter130_quest3](../hunter130_quest3/README.md)。
 仅在训练机器上重新导出或转换动作时执行（使用训练项目的 Python 环境）：
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 \
-  /home/milkyway/SuperMimic-Reproduced/.venv/bin/python scripts/export_supermimic.py \
+  /home/milkyway/SuperMimic-Reproduced/.venv/bin/python ../hunter130_quest3/tools/export_supermimic.py \
   --training-root /home/milkyway/SuperMimic-Reproduced \
   --checkpoint /home/milkyway/SuperMimic-Reproduced/logs/hunter130_4096_10h/ckpt_latest.pt \
   --output src/ec_controller/config/policy/hunter130_supermimic_176000.onnx \
@@ -260,6 +263,25 @@ PYTHONDONTWRITEBYTECODE=1 \
 本机 2000 次控制更新的 P99 为 0.129 ms（单次 ONNX 推理平均 1.19 ms，运行于后台）。
 `ec_controller`、`ec_radio`、`ec_description` 编译及安装检查通过；
 硬件包编译受本机缺少 `encos_driver`、`joint_sdk` 限制，尚未完成实机验证。
+
+## Quest 全身化身（模式 5 / CH7）
+
+安装与启动步骤见 [Quest 项目说明](../hunter130_quest3/README.md)，
+[已编译 APK](../hunter130_quest3/artifacts/hunter130-quest-debug.apk)。
+Quest 原生应用采集 Meta Body Tracking 全身骨架，电脑完成校准、IK、180 ms 实测窗口缓存，
+发布 `/quest/reference`。部署端复用 176000 步 SuperMimic 模型，以机器人自身关节和 IMU 闭环控制；位置反馈仍为零。
+机器人不依赖训练项目或 Android 构建环境。
+
+先在 Quest 松开握键、站直按 A 校准，再握双侧握键，等待桥接 `ready` 和 `/quest/ready=true`，
+从站立/行走切入 CH7。准备阶段保持中立姿态，`/quest/state=tracking` 后缓慢动作。
+双握键释放、断流或参考非法时回站并锁定退出，重新握键不会自动跟随；重新切换模式后才可接管。
+模式 2/3 等待回站完成，模式 1 直接阻尼。模式 4/5 之间经站立或行走切换。
+
+电脑和机器人需同步时钟，并保持同一 ROS_DOMAIN_ID。接收端校验消息时间、版本、关节名、序号、
+四元数和速度/限位，独立 150 ms 看门狗；推理仍在后台线程。Quest 身体跟踪丢失会取消校准。
+Meta 腿部是算法推算。人的骨盆位置用于生成参考，不能替代机器人的世界位置传感器，水平漂移仍可能存在。
+现有静态 PD 准备/回站仍未通过无支撑验证，首次实机调试需使用支撑。
+本机已完成协议/重定向、控制器生命周期、UDP→ROS 联动及短时合成骨架物理仿真；Quest 和实机尚未连接验证。
 
 ## 行走日志
 
